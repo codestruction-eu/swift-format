@@ -66,6 +66,8 @@ public class PrettyPrinter {
   private var configuration: Configuration { return context.configuration }
   private let maxLineLength: Int
   private var tokens: [Token]
+  private var source: String
+  private var disabledPosition: AbsolutePosition? = nil
   private var outputBuffer: String = ""
 
   /// The number of spaces remaining on the current line.
@@ -172,11 +174,14 @@ public class PrettyPrinter {
   ///   - printTokenStream: Indicates whether debug information about the token stream should be
   ///     printed to standard output.
   ///   - whitespaceOnly: Whether only whitespace changes should be made.
-  public init(context: Context, node: Syntax, printTokenStream: Bool, whitespaceOnly: Bool) {
+  public init(context: Context, source: String, node: Syntax, printTokenStream: Bool, whitespaceOnly: Bool) {
     self.context = context
+    self.source = source
     let configuration = context.configuration
     self.tokens = node.makeTokenStream(
-      configuration: configuration, operatorTable: context.operatorTable)
+      configuration: configuration,
+      selection: context.selection,
+      operatorTable: context.operatorTable)
     self.maxLineLength = configuration.lineLength
     self.spaceRemaining = self.maxLineLength
     self.printTokenStream = printTokenStream
@@ -237,6 +242,7 @@ public class PrettyPrinter {
   /// Before printing the text, this function will print any line-leading indentation or interior
   /// leading spaces that are required before the text itself.
   private func write(_ text: String) {
+    guard disabledPosition == nil else { return }
     if isAtStartOfLine {
       writeRaw(currentIndentation.indentation())
       spaceRemaining = maxLineLength - currentIndentation.length(in: configuration)
@@ -523,7 +529,9 @@ public class PrettyPrinter {
       }
 
     case .verbatim(let verbatim):
-      writeRaw(verbatim.print(indent: currentIndentation))
+      if disabledPosition == nil {
+        writeRaw(verbatim.print(indent: currentIndentation))
+      }
       consecutiveNewlineCount = 0
       pendingSpaces = 0
       lastBreak = false
@@ -568,6 +576,26 @@ public class PrettyPrinter {
       if shouldWriteComma {
         write(",")
         spaceRemaining -= 1
+      }
+
+    case .enableFormatting(let enabledPosition):
+      // if we're not disabled, we ignore the token
+      if let disabledPosition {
+        let start = source.utf8.index(source.utf8.startIndex, offsetBy: disabledPosition.utf8Offset)
+        let end: String.Index
+        if enabledPosition.utf8Offset != 0 {
+          end = source.utf8.index(source.utf8.startIndex, offsetBy: enabledPosition.utf8Offset)
+        } else {
+          end = source.endIndex
+        }
+        writeRaw(String(source[start..<end]))
+        self.disabledPosition = nil
+      }
+
+    case .disableFormatting(let newPosition):
+      // a second disable is ignored
+      if disabledPosition == nil {
+        disabledPosition = newPosition
       }
     }
   }
@@ -673,6 +701,10 @@ public class PrettyPrinter {
         let length = isSingleElement ? 0 : 1
         total += length
         lengths.append(length)
+
+      case .enableFormatting, .disableFormatting:
+        // no effect on length calculations
+        lengths.append(0)
       }
     }
 
@@ -775,6 +807,14 @@ public class PrettyPrinter {
     case .contextualBreakingEnd:
       printDebugIndent()
       print("[END BREAKING CONTEXT Idx: \(idx)]")
+
+    case .enableFormatting(let pos):
+      printDebugIndent()
+      print("[ENABLE FORMATTTING utf8 offset: \(pos)]")
+
+    case .disableFormatting(let pos):
+      printDebugIndent()
+      print("[DISABLE FORMATTTING utf8 offset: \(pos)]")
     }
   }
 

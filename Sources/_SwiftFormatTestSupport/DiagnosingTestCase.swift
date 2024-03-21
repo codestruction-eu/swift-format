@@ -22,6 +22,7 @@ open class DiagnosingTestCase: XCTestCase {
       operatorTable: .standardOperators,
       findingConsumer: findingConsumer,
       fileURL: URL(fileURLWithPath: "/tmp/test.swift"),
+      selection: nil,
       sourceFileSyntax: sourceFileSyntax,
       ruleNameCache: ruleNameCache)
     return context

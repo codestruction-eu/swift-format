@@ -99,8 +99,9 @@ class PrettyPrintTestCase: DiagnosingTestCase {
       findingConsumer: findingConsumer)
     let printer = PrettyPrinter(
       context: context,
+      source: source,
       node: Syntax(sourceFileSyntax),
-      printTokenStream: false,
+      printTokenStream: true,
       whitespaceOnly: whitespaceOnly)
     return (printer.prettyPrint(), context)
   }

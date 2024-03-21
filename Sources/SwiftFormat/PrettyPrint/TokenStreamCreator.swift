@@ -34,6 +34,7 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
   private let config: Configuration
   private let operatorTable: OperatorTable
   private let maxlinelength: Int
+  private let selection: Selection?
 
   /// The index of the most recently appended break, or nil when no break has been appended.
   private var lastBreakIndex: Int? = nil
@@ -68,17 +69,30 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
   /// in a function call containing multiple trailing closures).
   private var forcedBreakingClosures = Set<SyntaxIdentifier>()
 
-  init(configuration: Configuration, operatorTable: OperatorTable) {
+  /// Tracks whether we last considered ourselves inside the selection
+  private var isInsideSelection = true
+
+  init(configuration: Configuration, selection: Selection?, operatorTable: OperatorTable) {
     self.config = configuration
+    self.selection = selection
     self.operatorTable = operatorTable
     self.maxlinelength = config.lineLength
     super.init(viewMode: .all)
   }
 
   func makeStream(from node: Syntax) -> [Token] {
+    if selection != nil {
+      appendToken(.disableFormatting(AbsolutePosition(utf8Offset: 0)))
+      isInsideSelection = false
+    }
+
     // Because `walk` takes an `inout` argument, and we're a class, we have to do the following
     // dance to pass ourselves in.
     self.walk(node)
+
+    if selection != nil {
+      appendToken(.enableFormatting(AbsolutePosition(utf8Offset: 0)))
+    }
     defer { tokens = [] }
     return tokens
   }
@@ -2717,8 +2731,13 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     closeScopeTokens.forEach(appendToken)
 
     if !ignoredTokens.contains(token) {
+      generateEnable(
+        Selection.Range(
+          start: token.positionAfterSkippingLeadingTrivia,
+          end: token.endPositionBeforeTrailingTrivia))
       // Otherwise, it's just a regular token, so add the text as-is.
       appendToken(.syntax(token.presence == .present ? token.text : ""))
+      generateDisable(token.endPositionBeforeTrailingTrivia)
     }
 
     appendTrailingTrivia(token)
@@ -2726,6 +2745,22 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
 
     // It doesn't matter what we return here, tokens do not have children.
     return .skipChildren
+  }
+
+  func generateEnable(_ range: Selection.Range) {
+    guard let selection else { return }
+    if !isInsideSelection && selection.overlaps(range) {
+      appendToken(.enableFormatting(range.offset))
+      isInsideSelection = true
+    }
+  }
+
+  func generateDisable(_ position: AbsolutePosition) {
+    guard let selection else { return }
+    if isInsideSelection && !selection.contains(position) {
+      appendToken(.disableFormatting(position))
+      isInsideSelection = false
+    }
   }
 
   /// Appends the before-tokens of the given syntax token to the token stream.
@@ -3970,10 +4005,17 @@ private func isNestedInPostfixIfConfig(node: Syntax) -> Bool {
 
 extension Syntax {
   /// Creates a pretty-printable token stream for the provided Syntax node.
-  func makeTokenStream(configuration: Configuration, operatorTable: OperatorTable) -> [Token] {
-    let commentsMoved = CommentMovingRewriter().rewrite(self)
-    return TokenStreamCreator(configuration: configuration, operatorTable: operatorTable)
-      .makeStream(from: commentsMoved)
+  func makeTokenStream(
+    configuration: Configuration,
+    selection: Selection?,
+    operatorTable: OperatorTable
+  ) -> [Token] {
+    let commentsMoved = CommentMovingRewriter(selection: selection).rewrite(self)
+    return TokenStreamCreator(
+      configuration: configuration,
+      selection: selection,
+      operatorTable: operatorTable
+    ).makeStream(from: commentsMoved)
   }
 }
 
@@ -3983,6 +4025,12 @@ extension Syntax {
 /// For example, comments after binary operators are relocated to be before the operator, which
 /// results in fewer line breaks with the comment closer to the relevant tokens.
 class CommentMovingRewriter: SyntaxRewriter {
+  init(selection: Selection? = nil) {
+    self.selection = selection
+  }
+
+  var selection: Selection?
+
   override func visit(_ node: SourceFileSyntax) -> SourceFileSyntax {
     if shouldFormatterIgnore(file: node) {
       return node
@@ -3991,14 +4039,14 @@ class CommentMovingRewriter: SyntaxRewriter {
   }
 
   override func visit(_ node: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
-    if shouldFormatterIgnore(node: Syntax(node)) {
+    if shouldFormatterIgnore(node: Syntax(node)) || !Syntax(node).isInsideSelection(selection) {
       return node
     }
     return super.visit(node)
   }
 
   override func visit(_ node: MemberBlockItemSyntax) -> MemberBlockItemSyntax {
-    if shouldFormatterIgnore(node: Syntax(node)) {
+    if shouldFormatterIgnore(node: Syntax(node)) || !Syntax(node).isInsideSelection(selection) {
       return node
     }
     return super.visit(node)
