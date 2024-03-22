@@ -68,6 +68,7 @@ public class PrettyPrinter {
   private var tokens: [Token]
   private var source: String
   private var disabledPosition: AbsolutePosition? = nil
+  private var writingIsEnabled: Bool { disabledPosition == nil }
   private var outputBuffer: String = ""
 
   /// The number of spaces remaining on the current line.
@@ -221,7 +222,9 @@ public class PrettyPrinter {
     }
 
     guard numberToPrint > 0 else { return }
-    writeRaw(String(repeating: "\n", count: numberToPrint))
+    if writingIsEnabled {
+      writeRaw(String(repeating: "\n", count: numberToPrint))
+    }
     lineNumber += numberToPrint
     isAtStartOfLine = true
     consecutiveNewlineCount += numberToPrint
@@ -242,7 +245,7 @@ public class PrettyPrinter {
   /// Before printing the text, this function will print any line-leading indentation or interior
   /// leading spaces that are required before the text itself.
   private func write(_ text: String) {
-    guard disabledPosition == nil else { return }
+    guard writingIsEnabled else { return }
     if isAtStartOfLine {
       writeRaw(currentIndentation.indentation())
       spaceRemaining = maxLineLength - currentIndentation.length(in: configuration)
@@ -529,7 +532,7 @@ public class PrettyPrinter {
       }
 
     case .verbatim(let verbatim):
-      if disabledPosition == nil {
+      if writingIsEnabled {
         writeRaw(verbatim.print(indent: currentIndentation))
       }
       consecutiveNewlineCount = 0
@@ -583,18 +586,24 @@ public class PrettyPrinter {
       if let disabledPosition {
         let start = source.utf8.index(source.utf8.startIndex, offsetBy: disabledPosition.utf8Offset)
         let end: String.Index
-        if enabledPosition.utf8Offset != 0 {
+        if let enabledPosition {
           end = source.utf8.index(source.utf8.startIndex, offsetBy: enabledPosition.utf8Offset)
         } else {
           end = source.endIndex
         }
-        writeRaw(String(source[start..<end]))
+        let text = String(source[start..<end])
+        writeRaw(text)
+        if text.hasSuffix("\n") {
+          isAtStartOfLine = true
+          consecutiveNewlineCount = 1
+        }
+        pendingSpaces = 0
         self.disabledPosition = nil
       }
 
     case .disableFormatting(let newPosition):
       // a second disable is ignored
-      if disabledPosition == nil {
+      if writingIsEnabled {
         disabledPosition = newPosition
       }
     }

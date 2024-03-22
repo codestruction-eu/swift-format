@@ -56,26 +56,13 @@ public struct Selection {
     return ranges.contains {
       let maxStart = max($0.offset, range.offset)
       let minEnd = (min($0.end, range.end))
-      return maxStart <= minEnd
+      return maxStart < minEnd
     }
   }
 }
 
 
 public extension Syntax {
-
-  /// return true if the node touches any range in the selection (or if there's no selection)
-  func overlapsSelection(_ selection: Selection?) -> Bool {
-    // no selection means we should process everything
-    guard let selection else { return true }
-
-    return selection.ranges.contains { range in
-      let maxStart = max(range.offset, position)
-      let minEnd = (min(range.end, endPosition))
-      return maxStart <= minEnd
-    }
-  }
-
   /// return true if the node is completely inside any range in the selection (or if there's
   /// no selection)
   func isInsideSelection(_ selection: Selection?) -> Bool {
@@ -86,5 +73,4 @@ public extension Syntax {
       return range.offset <= position && endPosition <= range.end
     }
   }
-
 }

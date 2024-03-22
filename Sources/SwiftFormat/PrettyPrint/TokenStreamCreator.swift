@@ -81,6 +81,7 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
   }
 
   func makeStream(from node: Syntax) -> [Token] {
+    // if we have a selection, then we start outside of it
     if selection != nil {
       appendToken(.disableFormatting(AbsolutePosition(utf8Offset: 0)))
       isInsideSelection = false
@@ -90,8 +91,9 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     // dance to pass ourselves in.
     self.walk(node)
 
+    // Make sure we output any trailing text after the last selection range
     if selection != nil {
-      appendToken(.enableFormatting(AbsolutePosition(utf8Offset: 0)))
+      appendToken(.enableFormatting(nil))
     }
     defer { tokens = [] }
     return tokens
@@ -2730,15 +2732,16 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     extractLeadingTrivia(token)
     closeScopeTokens.forEach(appendToken)
 
+    generateEnable(Selection.Range(
+      start: token.positionAfterSkippingLeadingTrivia,
+      end: token.endPositionBeforeTrailingTrivia))
+
     if !ignoredTokens.contains(token) {
-      generateEnable(
-        Selection.Range(
-          start: token.positionAfterSkippingLeadingTrivia,
-          end: token.endPositionBeforeTrailingTrivia))
       // Otherwise, it's just a regular token, so add the text as-is.
       appendToken(.syntax(token.presence == .present ? token.text : ""))
-      generateDisable(token.endPositionBeforeTrailingTrivia)
     }
+
+    generateDisable(token.endPositionBeforeTrailingTrivia)
 
     appendTrailingTrivia(token)
     appendAfterTokensAndTrailingComments(token)
@@ -3226,11 +3229,14 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
   private func extractLeadingTrivia(_ token: TokenSyntax) {
     var isStartOfFile: Bool
     let trivia: Trivia
+    var position = token.position
     if let previousToken = token.previousToken(viewMode: .sourceAccurate) {
       isStartOfFile = false
       // Find the first non-whitespace in the previous token's trailing and peel those off.
       let (_, prevTrailingComments) = partitionTrailingTrivia(previousToken.trailingTrivia)
-      trivia = Trivia(pieces: prevTrailingComments) + token.leadingTrivia
+      let prevTrivia = Trivia(pieces: prevTrailingComments)
+      trivia = prevTrivia + token.leadingTrivia
+      position -= prevTrivia.sourceLength
     } else {
       isStartOfFile = true
       trivia = token.leadingTrivia
@@ -3257,6 +3263,7 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     var requiresNextNewline = false
 
     for (index, piece) in trivia.enumerated() {
+      generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
       if let cutoff = cutoffIndex, index == cutoff { break }
       switch piece {
       case .lineComment(let text):
@@ -3329,6 +3336,8 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
       default:
         break
       }
+      position += piece.sourceLength
+      generateDisable(position)
     }
   }
 
@@ -3441,7 +3450,7 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     case .break:
       lastBreakIndex = tokens.endIndex
       canMergeNewlinesIntoLastBreak = true
-    case .open, .printerControl, .contextualBreakingStart:
+    case .open, .printerControl, .contextualBreakingStart, .enableFormatting, .disableFormatting:
       break
     default:
       canMergeNewlinesIntoLastBreak = false

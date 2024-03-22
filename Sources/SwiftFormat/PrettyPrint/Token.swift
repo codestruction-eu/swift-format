@@ -200,7 +200,7 @@ enum Token {
 
   /// Turn formatting back on at the given position in the original file
   /// nil is used to indicate the rest of the file should be output
-  case enableFormatting(AbsolutePosition)
+  case enableFormatting(AbsolutePosition?)
 
   /// Turn formatting off at the given position in the original file.
   case disableFormatting(AbsolutePosition)
