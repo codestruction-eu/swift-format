@@ -101,7 +101,7 @@ class PrettyPrintTestCase: DiagnosingTestCase {
       context: context,
       source: source,
       node: Syntax(sourceFileSyntax),
-      printTokenStream: true,
+      printTokenStream: false,
       whitespaceOnly: whitespaceOnly)
     return (printer.prettyPrint(), context)
   }
