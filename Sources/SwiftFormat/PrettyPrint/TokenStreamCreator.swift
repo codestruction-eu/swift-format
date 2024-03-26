@@ -3263,12 +3263,13 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
     var requiresNextNewline = false
 
     for (index, piece) in trivia.enumerated() {
-      generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
       if let cutoff = cutoffIndex, index == cutoff { break }
       switch piece {
       case .lineComment(let text):
         if index > 0 || isStartOfFile {
+          generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
           appendToken(.comment(Comment(kind: .line, text: text), wasEndOfLine: false))
+          generateDisable(position + piece.sourceLength)
           appendNewlines(.soft)
           isStartOfFile = false
         }
@@ -3276,7 +3277,9 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
 
       case .blockComment(let text):
         if index > 0 || isStartOfFile {
+          generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
           appendToken(.comment(Comment(kind: .block, text: text), wasEndOfLine: false))
+          generateDisable(position + piece.sourceLength)
           // There is always a break after the comment to allow a discretionary newline after it.
           var breakSize = 0
           if index + 1 < trivia.endIndex {
@@ -3291,13 +3294,17 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
         requiresNextNewline = false
 
       case .docLineComment(let text):
+        generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
         appendToken(.comment(Comment(kind: .docLine, text: text), wasEndOfLine: false))
+        generateDisable(position + piece.sourceLength)
         appendNewlines(.soft)
         isStartOfFile = false
         requiresNextNewline = true
 
       case .docBlockComment(let text):
+        generateEnable(Selection.Range(start: position, end: position + piece.sourceLength))
         appendToken(.comment(Comment(kind: .docBlock, text: text), wasEndOfLine: false))
+        generateDisable(position + piece.sourceLength)
         appendNewlines(.soft)
         isStartOfFile = false
         requiresNextNewline = false
@@ -3337,7 +3344,6 @@ fileprivate final class TokenStreamCreator: SyntaxVisitor {
         break
       }
       position += piece.sourceLength
-      generateDisable(position)
     }
   }
 

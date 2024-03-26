@@ -56,7 +56,7 @@ public struct Selection {
     return ranges.contains {
       let maxStart = max($0.offset, range.offset)
       let minEnd = (min($0.end, range.end))
-      return maxStart < minEnd
+      return maxStart <= minEnd
     }
   }
 }

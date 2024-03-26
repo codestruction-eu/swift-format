@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 import SwiftSyntax
+import Foundation
 
 /// PrettyPrinter takes a Syntax node and outputs a well-formatted, re-indented reproduction of the
 /// code as a String.
@@ -245,15 +246,18 @@ public class PrettyPrinter {
   /// Before printing the text, this function will print any line-leading indentation or interior
   /// leading spaces that are required before the text itself.
   private func write(_ text: String) {
-    guard writingIsEnabled else { return }
     if isAtStartOfLine {
-      writeRaw(currentIndentation.indentation())
+      if writingIsEnabled {
+        writeRaw(currentIndentation.indentation())
+      }
       spaceRemaining = maxLineLength - currentIndentation.length(in: configuration)
       isAtStartOfLine = false
-    } else if pendingSpaces > 0 {
+    } else if pendingSpaces > 0 && writingIsEnabled {
       writeRaw(String(repeating: " ", count: pendingSpaces))
     }
-    writeRaw(text)
+    if writingIsEnabled {
+      writeRaw(text)
+    }
     consecutiveNewlineCount = 0
     pendingSpaces = 0
   }
@@ -591,13 +595,21 @@ public class PrettyPrinter {
         } else {
           end = source.endIndex
         }
-        let text = String(source[start..<end])
+        var text = String(source[start..<end])
+        // strip trailing whitespace so that the next formatting can add the right amount
+        if let nonWhitespace = text.rangeOfCharacter(
+          from: CharacterSet.whitespaces.inverted, options: .backwards) {
+          text = String(text[..<nonWhitespace.upperBound])
+        }
+
         writeRaw(text)
         if text.hasSuffix("\n") {
           isAtStartOfLine = true
           consecutiveNewlineCount = 1
+        } else {
+          isAtStartOfLine = false
+          consecutiveNewlineCount = 0
         }
-        pendingSpaces = 0
         self.disabledPosition = nil
       }
 
