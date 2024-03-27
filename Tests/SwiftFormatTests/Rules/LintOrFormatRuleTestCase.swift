@@ -40,6 +40,7 @@ class LintOrFormatRuleTestCase: DiagnosingTestCase {
     let context = makeContext(
       sourceFileSyntax: sourceFileSyntax,
       configuration: configuration,
+      selection: nil,
       findingConsumer: { emittedFindings.append($0) })
     let linter = type.init(context: context)
     linter.walk(sourceFileSyntax)
@@ -111,6 +112,7 @@ class LintOrFormatRuleTestCase: DiagnosingTestCase {
     let context = makeContext(
       sourceFileSyntax: sourceFileSyntax,
       configuration: configuration,
+      selection: nil,
       findingConsumer: { emittedFindings.append($0) })
 
     let formatter = formatType.init(context: context)

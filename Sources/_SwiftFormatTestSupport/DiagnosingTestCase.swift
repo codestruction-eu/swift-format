@@ -15,6 +15,7 @@ open class DiagnosingTestCase: XCTestCase {
   public func makeContext(
     sourceFileSyntax: SourceFileSyntax,
     configuration: Configuration? = nil,
+    selection: Selection?,
     findingConsumer: @escaping (Finding) -> Void
   ) -> Context {
     let context = Context(
@@ -22,7 +23,7 @@ open class DiagnosingTestCase: XCTestCase {
       operatorTable: .standardOperators,
       findingConsumer: findingConsumer,
       fileURL: URL(fileURLWithPath: "/tmp/test.swift"),
-      selection: nil,
+      selection: selection,
       sourceFileSyntax: sourceFileSyntax,
       ruleNameCache: ruleNameCache)
     return context

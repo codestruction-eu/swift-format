@@ -32,6 +32,11 @@ public struct Selection {
       length = end.utf8Offset - start.utf8Offset
     }
 
+    public init(start: Int, end: Int) {
+      offset = AbsolutePosition(utf8Offset: start)
+      length = end - start
+    }
+
     enum CodingKeys: CodingKey {
       case offset
       case length
@@ -45,6 +50,10 @@ public struct Selection {
           let ranges = try? JSONDecoder().decode([Range].self, from: data) else {
       return nil
     }
+    self.ranges = ranges
+  }
+
+  public init(ranges: [Selection.Range]) {
     self.ranges = ranges
   }
 
