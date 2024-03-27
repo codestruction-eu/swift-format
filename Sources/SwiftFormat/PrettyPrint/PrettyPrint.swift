@@ -831,11 +831,11 @@ public class PrettyPrinter {
 
     case .enableFormatting(let pos):
       printDebugIndent()
-      print("[ENABLE FORMATTTING utf8 offset: \(pos)]")
+      print("[ENABLE FORMATTING utf8 offset: \(String(describing: pos))]")
 
     case .disableFormatting(let pos):
       printDebugIndent()
-      print("[DISABLE FORMATTTING utf8 offset: \(pos)]")
+      print("[DISABLE FORMATTING utf8 offset: \(pos)]")
     }
   }
 
